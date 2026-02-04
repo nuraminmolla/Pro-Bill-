@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Home,
   ReceiptText, 
@@ -20,12 +20,24 @@ import {
   Scale,
   History,
   Moon,
-  Sun
+  Sun,
+  LayoutGrid,
+  FileSpreadsheet,
+  UserPlus,
+  Share2,
+  Edit2,
+  Calendar,
+  Truck,
+  CheckCircle2,
+  ChevronDown
 } from 'lucide-react';
-import { Customer, Bill, BillItem, ViewState } from './types';
+import { Customer, Bill, BillItem, ViewState, PaymentMethod } from './types';
 import { BUSINESS_PROFILE, DEFAULT_PRODUCT } from './constants';
 import { formatCurrency } from './utils/helpers';
 import { generateInvoicePDF } from './services/pdfService';
+import { generateDailyReportPDF } from './services/reportService';
+
+const DRAFT_STORAGE_KEY = 'mrt_bill_draft';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewState>('DASHBOARD');
@@ -65,6 +77,17 @@ const App: React.FC = () => {
 
   const addCustomer = (customer: Customer) => {
     setCustomers(prev => [...prev, customer]);
+    return customer;
+  };
+
+  const updateCustomer = (updatedCustomer: Customer) => {
+    setCustomers(prev => prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
+    setBills(prev => prev.map(b => b.customerId === updatedCustomer.id ? {
+      ...b,
+      customerName: updatedCustomer.name,
+      customerGstin: updatedCustomer.gstin,
+      customerAddress: updatedCustomer.address
+    } : b));
   };
 
   const addBill = (bill: Bill) => {
@@ -81,8 +104,8 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (activeView) {
       case 'DASHBOARD': return <Dashboard bills={bills} setActiveView={setActiveView} />;
-      case 'NEW_BILL': return <NewBillForm customers={customers} onSave={addBill} />;
-      case 'CUSTOMERS': return <CustomerManager customers={customers} onAdd={addCustomer} />;
+      case 'NEW_BILL': return <NewBillForm customers={customers} onSave={addBill} onAddCustomer={addCustomer} />;
+      case 'CUSTOMERS': return <CustomerManager customers={customers} onAdd={addCustomer} onUpdate={updateCustomer} />;
       case 'HISTORY': return <BillHistory bills={bills} onDelete={deleteBill} />;
       default: return <Dashboard bills={bills} setActiveView={setActiveView} />;
     }
@@ -90,7 +113,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row pb-24 md:pb-0 bg-background-light dark:bg-rice-dark transition-colors duration-300">
-      {/* Desktop Sidebar */}
       <nav className="hidden md:block w-72 bg-white dark:bg-rice-surface border-r border-gray-100 dark:border-gray-800 flex-shrink-0 sticky top-0 h-screen transition-colors">
         <div className="p-8 h-full flex flex-col">
           <div className="flex items-center gap-3 mb-12">
@@ -129,13 +151,12 @@ const App: React.FC = () => {
             onClick={toggleTheme}
             className="flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold text-gray-400 hover:bg-gray-50 dark:hover:bg-rice-dark transition-all mt-auto"
           >
-            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
             {isDarkMode ? 'Light Mode' : 'Dark Mode'}
           </button>
         </div>
       </nav>
 
-      {/* Mobile Top Header */}
       <div className="md:hidden sticky top-0 z-50 bg-white/80 dark:bg-rice-surface/80 ios-blur border-b border-gray-100 dark:border-gray-800 px-6 py-4 flex items-center justify-between transition-colors">
         <div className="flex items-center gap-3">
           <div className="size-10 bg-primary rounded-full flex items-center justify-center">
@@ -159,14 +180,12 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="flex-1 p-4 md:p-12 overflow-x-hidden">
         <div className="max-w-4xl mx-auto">
           {renderView()}
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-rice-surface border-t border-gray-100 dark:border-gray-800 flex justify-around items-center px-4 pt-3 pb-8 z-50 shadow-[0_-8px_30px_rgb(0,0,0,0.08)] transition-colors">
         {[
           { id: 'DASHBOARD', icon: Home, label: 'HOME' },
@@ -198,30 +217,34 @@ const App: React.FC = () => {
 };
 
 const Dashboard: React.FC<{ bills: Bill[], setActiveView: (v: ViewState) => void }> = ({ bills, setActiveView }) => {
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const totalSales = bills.reduce((sum, b) => sum + b.totalAmount, 0);
   const mockRevenue = totalSales * 0.28;
 
+  const handleDownloadReport = () => {
+    generateDailyReportPDF(bills, reportDate);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Stats Cards - Small Style */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="bg-white dark:bg-rice-surface p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-1.5 transition-all hover:border-primary/20">
+        <div className="bg-white dark:bg-rice-surface p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-2 transition-all hover:border-primary/20">
           <div className="flex items-center justify-between">
             <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Total Sales</p>
             <TrendingUp className="text-primary dark:text-blue-400 w-4 h-4" />
           </div>
-          <p className="text-xl font-black text-primary dark:text-blue-200">{formatCurrency(totalSales)}</p>
+          <p className="text-2xl font-black text-primary dark:text-blue-200">{formatCurrency(totalSales)}</p>
           <div className="flex items-center gap-1.5">
             <span className="text-primary dark:text-blue-400 text-[9px] font-black px-1.5 py-0.5 bg-primary/5 dark:bg-blue-900/20 rounded-md">+12.5%</span>
             <span className="text-gray-400 text-[9px] font-bold">vs last month</span>
           </div>
         </div>
-        <div className="bg-white dark:bg-rice-surface p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-1.5 transition-all hover:border-primary/20">
+        <div className="bg-white dark:bg-rice-surface p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-2 transition-all hover:border-primary/20">
           <div className="flex items-center justify-between">
             <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Est. Revenue</p>
             <Wallet className="text-primary dark:text-blue-400 w-4 h-4" />
           </div>
-          <p className="text-xl font-black text-primary dark:text-blue-200">{formatCurrency(mockRevenue)}</p>
+          <p className="text-2xl font-black text-primary dark:text-blue-200">{formatCurrency(mockRevenue)}</p>
           <div className="flex items-center gap-1.5">
             <span className="text-primary dark:text-blue-400 text-[9px] font-black px-1.5 py-0.5 bg-primary/5 dark:bg-blue-900/20 rounded-md">+5.2%</span>
             <span className="text-gray-400 text-[9px] font-bold">this week</span>
@@ -229,67 +252,89 @@ const Dashboard: React.FC<{ bills: Bill[], setActiveView: (v: ViewState) => void
         </div>
       </div>
 
-      <div className="space-y-3">
-        <h3 className="text-base font-black tracking-tight ml-1 dark:text-gray-300">Quick Actions</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button 
-            onClick={() => setActiveView('NEW_BILL')}
-            className="bg-primary p-6 rounded-[2rem] flex flex-col items-center justify-center gap-2.5 text-white font-black shadow-lg shadow-primary/10 active:scale-95 transition-all hover:bg-primary/95"
-          >
-            <ReceiptText className="w-7 h-7" />
-            <span className="text-xs">Create Bill</span>
-          </button>
-          <button 
-            onClick={() => setActiveView('CUSTOMERS')}
-            className="bg-white dark:bg-rice-surface p-6 rounded-[2rem] flex flex-col items-center justify-center gap-2.5 border border-gray-100 dark:border-gray-800 font-black shadow-sm active:scale-95 transition-all hover:bg-gray-50 dark:hover:bg-rice-dark/50"
-          >
-            <PlusCircle className="w-7 h-7 text-primary dark:text-blue-400" />
-            <span className="text-xs text-primary dark:text-blue-400">Add Customer</span>
-          </button>
+      <div className="space-y-4">
+        <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 ml-1">Quick Actions</h3>
+        
+        <button 
+          onClick={() => setActiveView('NEW_BILL')}
+          className="w-full bg-primary p-10 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 text-white font-black shadow-xl shadow-primary/20 active:scale-95 transition-all hover:bg-primary/95"
+        >
+          <div className="size-12 bg-white/10 rounded-xl flex items-center justify-center">
+            <ReceiptText className="w-8 h-8" />
+          </div>
+          <span className="text-sm tracking-widest uppercase">Create Bill</span>
+        </button>
+        
+        <div className="bg-white dark:bg-rice-surface p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col items-center gap-6 transition-all hover:border-primary/20">
+          <div className="flex items-center gap-3">
+            <div className="size-10 bg-primary/10 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+              <FileSpreadsheet className="w-5 h-5 text-primary dark:text-blue-400" />
+            </div>
+            <p className="text-xs font-black text-primary dark:text-blue-400 uppercase tracking-widest">Sales Report</p>
+          </div>
+          
+          <div className="w-full max-w-sm flex items-center gap-3">
+            <div className="flex-1 relative group">
+              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
+              <input 
+                type="date" 
+                value={reportDate} 
+                onChange={(e) => setReportDate(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-rice-dark border-none rounded-2xl text-sm font-bold dark:text-gray-200 focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+            </div>
+            <button 
+              onClick={handleDownloadReport}
+              className="size-14 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20 flex items-center justify-center active:scale-90 transition-all hover:bg-primary/95"
+              title="Download Report"
+            >
+              <Download className="w-6 h-6" />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-base font-black tracking-tight dark:text-gray-300">Activity Trend</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-gray-400">Activity Trend</h3>
           <span className="text-[9px] font-black text-primary dark:text-blue-400 uppercase tracking-widest">Last 7 Days</span>
         </div>
-        <div className="bg-white dark:bg-rice-surface p-4 rounded-3xl h-32 flex items-end justify-between gap-2 border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="bg-white dark:bg-rice-surface p-6 rounded-[2.5rem] h-40 flex items-end justify-between gap-3 border border-gray-100 dark:border-gray-800 shadow-sm">
           {[40, 60, 35, 75, 95, 50, 65].map((h, i) => (
             <div 
               key={i} 
-              className={`flex-1 rounded-t-md transition-all duration-1000 ${i === 4 ? 'bg-primary dark:bg-blue-500 shadow-sm' : 'bg-primary/10 dark:bg-blue-900/20'}`} 
+              className={`flex-1 rounded-t-xl transition-all duration-1000 ${i === 4 ? 'bg-primary dark:bg-blue-500 shadow-sm shadow-primary/20' : 'bg-primary/10 dark:bg-blue-900/20'}`} 
               style={{ height: `${h}%` }}
             ></div>
           ))}
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-base font-black tracking-tight dark:text-gray-300">Recent Activity</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-gray-400">Recent Activity</h3>
           <button onClick={() => setActiveView('HISTORY')} className="text-[9px] font-black text-primary dark:text-blue-400 uppercase tracking-widest hover:underline">View All</button>
         </div>
         <div className="space-y-2">
           {bills.length === 0 ? (
-            <div className="bg-white dark:bg-rice-surface p-8 rounded-3xl text-center text-gray-400 dark:text-gray-500 font-bold border border-dashed border-gray-200 dark:border-gray-800">
+            <div className="bg-white dark:bg-rice-surface p-12 rounded-[2.5rem] text-center text-gray-400 dark:text-gray-500 font-bold border border-dashed border-gray-200 dark:border-gray-800">
               No recent activity
             </div>
           ) : (
             bills.slice(0, 3).map(bill => (
-              <div key={bill.id} className="bg-white dark:bg-rice-surface p-4 rounded-2xl border border-gray-50 dark:border-gray-800 shadow-sm flex items-center justify-between group cursor-pointer hover:shadow-md transition-all active:scale-[0.98]">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-gray-50 dark:bg-rice-dark flex items-center justify-center group-hover:bg-primary/5 dark:group-hover:bg-blue-900/20 transition-colors">
-                    <Users className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-primary dark:group-hover:text-blue-400 transition-colors" />
+              <div key={bill.id} className="bg-white dark:bg-rice-surface p-5 rounded-3xl border border-gray-50 dark:border-gray-800 shadow-sm flex items-center justify-between group cursor-pointer hover:shadow-md transition-all active:scale-[0.98]">
+                <div className="flex items-center gap-4">
+                  <div className="size-12 rounded-2xl bg-gray-50 dark:bg-rice-dark flex items-center justify-center group-hover:bg-primary/5 dark:group-hover:bg-blue-900/20 transition-colors">
+                    <Users className="w-5 h-5 text-gray-300 dark:text-gray-600 group-hover:text-primary dark:group-hover:text-blue-400 transition-colors" />
                   </div>
                   <div>
-                    <p className="font-black text-xs leading-none mb-1 dark:text-gray-200">{bill.customerName}</p>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">#{bill.billNo}</p>
+                    <p className="font-black text-sm leading-none mb-1.5 dark:text-gray-200">{bill.customerName}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">#{bill.billNo}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-primary dark:text-blue-400 text-sm">{formatCurrency(bill.totalAmount)}</p>
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Paid • Today</p>
+                  <p className="font-black text-primary dark:text-blue-400 text-base">{formatCurrency(bill.totalAmount)}</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Paid • Today</p>
                 </div>
               </div>
             ))
@@ -300,50 +345,118 @@ const Dashboard: React.FC<{ bills: Bill[], setActiveView: (v: ViewState) => void
   );
 };
 
-const NewBillForm: React.FC<{ customers: Customer[], onSave: (b: Bill) => void }> = ({ customers, onSave }) => {
-  const [formData, setFormData] = useState({
-    billNo: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 900) + 100}`,
-    date: new Date().toISOString().split('T')[0],
-    customerId: '',
-    vehicleNo: '',
-    destination: '',
-    paymentMode: 'RTGS' as 'RTGS' | 'Cash',
-  });
+const NewBillForm: React.FC<{ 
+  customers: Customer[], 
+  onSave: (bill: Bill) => void,
+  onAddCustomer: (customer: Customer) => Customer
+}> = ({ customers, onSave, onAddCustomer }) => {
+  const getDraft = () => {
+    const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return null;
+  };
 
-  const [items, setItems] = useState<BillItem[]>([{
-    id: '1',
+  const draft = getDraft();
+
+  const [selectedCustomerId, setSelectedCustomerId] = useState(draft?.selectedCustomerId || '');
+  const [customerSearchTerm, setCustomerSearchTerm] = useState(draft?.customerSearchTerm || '');
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [vehicleNo, setVehicleNo] = useState(draft?.vehicleNo || '');
+  const [destination, setDestination] = useState(draft?.destination || '');
+  const [paymentMode, setPaymentMode] = useState<PaymentMethod>(draft?.paymentMode || 'CASH');
+  const [items, setItems] = useState<BillItem[]>(draft?.items || []);
+  
+  const [newItem, setNewItem] = useState<Partial<BillItem>>(draft?.newItem || {
     description: DEFAULT_PRODUCT.description,
     hsn: DEFAULT_PRODUCT.hsn,
     quantity: 0,
-    unit: 'QTL',
-    rate: 0,
-    amount: 0
-  }]);
+    unit: 'BAGS',
+    rate: 0
+  });
 
-  const selectedCustomer = customers.find(c => c.id === formData.customerId);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [newCust, setNewCust] = useState({ name: '', gstin: '', address: '', phone: '' });
 
-  const addItem = () => {
-    setItems([...items, {
-      id: Math.random().toString(),
-      description: DEFAULT_PRODUCT.description,
-      hsn: DEFAULT_PRODUCT.hsn,
-      quantity: 0,
-      unit: 'QTL',
-      rate: 0,
-      amount: 0
-    }]);
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsCustomerDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Periodic Auto-save effect
+  useEffect(() => {
+    const billDraft = {
+      selectedCustomerId,
+      customerSearchTerm,
+      vehicleNo,
+      destination,
+      paymentMode,
+      items,
+      newItem
+    };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(billDraft));
+  }, [selectedCustomerId, customerSearchTerm, vehicleNo, destination, paymentMode, items, newItem]);
+
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    c.gstin.toLowerCase().includes(customerSearchTerm.toLowerCase())
+  );
+
+  const handleQuickAdd = () => {
+    if (!newCust.name || !newCust.address) return alert('Name and Address are required');
+    const added = onAddCustomer({
+      id: Math.random().toString(36).substr(2, 9),
+      ...newCust,
+      gstin: newCust.gstin || 'UNREGISTERED'
+    });
+    setSelectedCustomerId(added.id);
+    setCustomerSearchTerm(added.name);
+    setShowQuickAdd(false);
+    setNewCust({ name: '', gstin: '', address: '', phone: '' });
   };
 
-  const updateItem = (id: string, field: keyof BillItem, value: any) => {
+  const addItemToBill = () => {
+    if (newItem.description && newItem.quantity && newItem.rate) {
+      const addedItem: BillItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        description: newItem.description || '',
+        hsn: newItem.hsn || '',
+        quantity: Number(newItem.quantity),
+        unit: newItem.unit || 'BAGS',
+        rate: Number(newItem.rate),
+        amount: Number(newItem.quantity) * Number(newItem.rate)
+      };
+      setItems([...items, addedItem]);
+      setNewItem({
+        description: DEFAULT_PRODUCT.description,
+        hsn: DEFAULT_PRODUCT.hsn,
+        quantity: 0,
+        unit: 'BAGS',
+        rate: 0
+      });
+    }
+  };
+
+  const removeItem = (id: string) => {
+    setItems(items.filter(item => item.id !== id));
+  };
+
+  const updateAddedItem = (id: string, field: keyof BillItem, value: any) => {
     setItems(prevItems => prevItems.map(item => {
       if (item.id === id) {
-        let finalValue = value;
-        if (field === 'quantity' || field === 'rate' || field === 'amount') {
-          finalValue = value === '' ? 0 : Number(value);
-        }
-        const updated = { ...item, [field]: finalValue };
+        const updated = { ...item, [field]: value };
         if (field === 'quantity' || field === 'rate') {
-          updated.amount = Number(updated.quantity || 0) * Number(updated.rate || 0);
+          updated.amount = Number(updated.quantity) * Number(updated.rate);
         }
         return updated;
       }
@@ -351,248 +464,624 @@ const NewBillForm: React.FC<{ customers: Customer[], onSave: (b: Bill) => void }
     }));
   };
 
-  const removeItem = (id: string) => {
-    if (items.length > 1) {
-      setItems(items.filter(i => i.id !== id));
-    }
-  };
-
-  const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-  const totalQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-
   const handleSave = () => {
-    if (!formData.customerId) {
-      alert('Please select a customer first');
-      return;
-    }
-    if (totalAmount <= 0) {
-      alert('Total amount must be greater than zero');
-      return;
-    }
+    const customer = customers.find(c => c.id === selectedCustomerId);
+    if (!customer) return alert('Please select a customer');
+    if (items.length === 0) return alert('Please add at least one item');
+
+    const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
     const bill: Bill = {
-      ...formData,
-      id: Math.random().toString(),
-      customerName: selectedCustomer?.name || '',
-      customerGstin: selectedCustomer?.gstin || '',
-      customerAddress: selectedCustomer?.address || '',
+      id: Math.random().toString(36).substr(2, 9),
+      billNo: `MRT/${new Date().getFullYear()}/${Math.floor(Math.random() * 10000)}`,
+      date: new Date().toISOString().split('T')[0],
+      customerId: customer.id,
+      customerName: customer.name,
+      customerGstin: customer.gstin,
+      customerAddress: customer.address,
+      vehicleNo,
+      destination,
+      paymentMode,
       items,
       totalAmount,
       totalQuantity,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
     onSave(bill);
     generateInvoicePDF(bill);
+    // Clear draft after successful save
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
   };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500 pb-72 md:pb-32">
-      <header className="flex flex-col gap-2">
-        <h2 className="text-2xl font-black text-primary dark:text-blue-400">New Invoice</h2>
-        <p className="text-gray-400 text-sm font-medium">Standard GST Bill of Supply</p>
-      </header>
+    <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="size-12 bg-primary/10 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center">
+          <ReceiptText className="w-6 h-6 text-primary dark:text-blue-400" />
+        </div>
+        <div className="flex flex-col">
+          <h2 className="text-2xl font-black tracking-tight dark:text-gray-100">Create New Bill</h2>
+          {draft && <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Draft restored from last session</p>}
+        </div>
+      </div>
 
-      <div className="space-y-4">
-        {/* Header Metadata */}
-        <section className="bg-white dark:bg-rice-surface p-5 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm space-y-5 transition-colors">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2 block">Invoice No</label>
-              <input type="text" value={formData.billNo} onChange={e => setFormData({ ...formData, billNo: e.target.value })} className="w-full p-3.5 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-black text-sm outline-none transition-all" />
+      <div className="bg-white dark:bg-rice-surface p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2 relative" ref={dropdownRef}>
+            <div className="flex items-center justify-between px-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select Customer</label>
+              <button 
+                onClick={() => setShowQuickAdd(!showQuickAdd)}
+                className="text-[10px] font-black text-primary dark:text-blue-400 flex items-center gap-1 hover:underline active:scale-95 transition-all"
+              >
+                <UserPlus className="w-3 h-3" /> ADD NEW
+              </button>
             </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2 block">Date</label>
-              <input type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full p-3.5 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-black text-sm outline-none transition-all" />
-            </div>
-          </div>
-
-          <div className="relative">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2 block">Party / Customer</label>
-            <div className="relative">
-              <select value={formData.customerId} onChange={e => setFormData({ ...formData, customerId: e.target.value })} className="w-full p-4 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-black text-sm outline-none appearance-none transition-all">
-                <option value="">-- Choose Party --</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 pointer-events-none rotate-90" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input type="text" placeholder="Vehicle No (WB15B...)" value={formData.vehicleNo} onChange={e => setFormData({ ...formData, vehicleNo: e.target.value })} className="w-full p-3.5 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-bold text-sm outline-none transition-all" />
-            <input type="text" placeholder="Destination" value={formData.destination} onChange={e => setFormData({ ...formData, destination: e.target.value })} className="w-full p-3.5 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-bold text-sm outline-none transition-all" />
-          </div>
-        </section>
-
-        {/* Item Rows */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="font-black text-sm uppercase tracking-widest text-gray-400">Items List</h3>
-            <button onClick={addItem} className="flex items-center gap-2 bg-primary/10 dark:bg-blue-900/20 text-primary dark:text-blue-400 py-2 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-primary hover:text-white transition-all">
-              <PlusSquare className="w-4 h-4" /> Add Line
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {items.map((item) => (
-              <div key={item.id} className="bg-white dark:bg-rice-surface p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm relative group transition-colors">
-                {items.length > 1 && (
-                  <button onClick={() => removeItem(item.id)} className="absolute -top-2 -right-2 bg-white dark:bg-rice-dark text-red-500 p-2 rounded-full border border-red-50 dark:border-red-900/20 shadow-sm active:bg-red-500 active:text-white z-10 transition-all">
-                    <X className="w-4 h-4" />
+            
+            {showQuickAdd ? (
+              <div className="bg-gray-50 dark:bg-rice-dark p-6 rounded-3xl space-y-4 border border-primary/10 animate-in slide-in-from-top-2">
+                <input 
+                  className="w-full bg-white dark:bg-rice-surface border-none rounded-2xl px-5 py-3 text-sm font-bold dark:text-gray-200 shadow-sm"
+                  placeholder="Business Name"
+                  value={newCust.name}
+                  onChange={e => setNewCust({...newCust, name: e.target.value})}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input 
+                    className="w-full bg-white dark:bg-rice-surface border-none rounded-2xl px-5 py-3 text-sm font-bold dark:text-gray-200 shadow-sm"
+                    placeholder="GSTIN"
+                    value={newCust.gstin}
+                    onChange={e => setNewCust({...newCust, gstin: e.target.value})}
+                  />
+                  <input 
+                    className="w-full bg-white dark:bg-rice-surface border-none rounded-2xl px-5 py-3 text-sm font-bold dark:text-gray-200 shadow-sm"
+                    placeholder="Phone No"
+                    maxLength={10}
+                    value={newCust.phone}
+                    onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        if (val.length <= 10) setNewCust({...newCust, phone: val});
+                    }}
+                  />
+                </div>
+                <textarea 
+                  className="w-full bg-white dark:bg-rice-surface border-none rounded-2xl px-5 py-3 text-sm font-bold dark:text-gray-200 shadow-sm"
+                  placeholder="Address"
+                  rows={2}
+                  value={newCust.address}
+                  onChange={e => setNewCust({...newCust, address: e.target.value})}
+                />
+                <div className="flex gap-3">
+                  <button onClick={handleQuickAdd} className="flex-1 bg-primary text-white py-3 rounded-2xl text-xs font-black shadow-lg shadow-primary/20">SAVE & SELECT</button>
+                  <button onClick={() => setShowQuickAdd(false)} className="px-5 bg-gray-200 dark:bg-gray-800 text-gray-500 rounded-2xl text-xs font-black">CANCEL</button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input 
+                      className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl pl-12 pr-10 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+                      placeholder="Search name or GSTIN..."
+                      value={customerSearchTerm}
+                      onFocus={() => setIsCustomerDropdownOpen(true)}
+                      onChange={(e) => {
+                        setCustomerSearchTerm(e.target.value);
+                        if (!selectedCustomerId || e.target.value !== customers.find(c => c.id === selectedCustomerId)?.name) {
+                            setSelectedCustomerId('');
+                        }
+                        setIsCustomerDropdownOpen(true);
+                      }}
+                    />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    {customerSearchTerm && (
+                      <button 
+                        onClick={() => { setCustomerSearchTerm(''); setSelectedCustomerId(''); }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <button 
+                    className={`size-14 rounded-2xl flex items-center justify-center transition-all shadow-sm ${selectedCustomerId ? 'bg-green-500 text-white' : 'bg-white dark:bg-rice-dark border border-primary/20 text-primary'}`}
+                    onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
+                  >
+                    {selectedCustomerId ? <CheckCircle2 className="w-6 h-6" /> : <ChevronDown className={`w-6 h-6 transform transition-transform ${isCustomerDropdownOpen ? 'rotate-180' : ''}`} />}
                   </button>
+                </div>
+
+                {isCustomerDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-rice-surface border border-gray-100 dark:border-gray-800 rounded-[2rem] shadow-2xl z-[100] max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-4 duration-300 ios-blur">
+                    {filteredCustomers.length > 0 ? (
+                      filteredCustomers.map(c => (
+                        <button
+                          key={c.id}
+                          className={`w-full text-left px-6 py-4 hover:bg-primary/5 dark:hover:bg-blue-900/20 border-b border-gray-50 dark:border-gray-800 last:border-none flex flex-col gap-1 transition-colors ${selectedCustomerId === c.id ? 'bg-primary/5 dark:bg-blue-900/30' : ''}`}
+                          onClick={() => {
+                            setSelectedCustomerId(c.id);
+                            setCustomerSearchTerm(c.name);
+                            setIsCustomerDropdownOpen(false);
+                          }}
+                        >
+                          <span className="font-black text-sm dark:text-gray-100">{c.name}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{c.gstin}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center">
+                        <p className="text-xs font-bold text-gray-400 mb-3">No customer found</p>
+                        <button onClick={() => setShowQuickAdd(true)} className="text-xs font-black text-primary dark:text-blue-400 underline uppercase tracking-widest">Create New Partner</button>
+                      </div>
+                    )}
+                  </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  <div className="md:col-span-5">
-                    <label className="text-[9px] font-black text-gray-300 dark:text-gray-500 uppercase mb-1 block">Description</label>
-                    <input type="text" value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)} className="w-full bg-gray-50 dark:bg-rice-dark dark:text-gray-200 p-3 rounded-xl font-bold text-sm outline-none transition-all" />
+              </div>
+            )}
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Payment Mode</label>
+            <select 
+              className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl px-5 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 appearance-none shadow-sm"
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value as PaymentMethod)}
+            >
+              <option value="CASH">Cash</option>
+              <option value="BANK">Bank Transfer</option>
+              <option value="UPI">UPI</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Vehicle No</label>
+            <div className="relative group">
+              <Truck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
+              <input 
+                className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl pl-12 pr-5 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+                placeholder="e.g. WB 41D 1234"
+                value={vehicleNo}
+                onChange={(e) => setVehicleNo(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Destination</label>
+            <input 
+              className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl px-5 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+              placeholder="Destination Address"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-50 dark:border-gray-800 pt-8">
+          <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-1">Line Items</h3>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {items.map(item => (
+              <div key={item.id} className="group bg-gray-50 dark:bg-rice-dark rounded-[2rem] border border-gray-100 dark:border-gray-800 transition-all shadow-sm hover:border-primary/10 p-6 flex flex-col gap-4">
+                <div className="flex flex-col text-center">
+                   <input 
+                      className="w-full bg-transparent border-none p-0 font-black text-sm dark:text-gray-200 focus:ring-0 text-center uppercase"
+                      value={item.description}
+                      onChange={(e) => updateAddedItem(item.id, 'description', e.target.value)}
+                    />
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-0.5">Product Description</p>
+                </div>
+
+                <div className="space-y-4 pt-1">
+                  <div>
+                    <input 
+                      className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm"
+                      value={item.hsn}
+                      onChange={(e) => updateAddedItem(item.id, 'hsn', e.target.value)}
+                    />
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">HSN/SAC</p>
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[9px] font-black text-gray-300 dark:text-gray-500 uppercase mb-1 block">HSN</label>
-                    <input type="text" value={item.hsn} onChange={e => updateItem(item.id, 'hsn', e.target.value)} className="w-full bg-gray-50 dark:bg-rice-dark dark:text-gray-200 p-3 rounded-xl font-bold text-sm text-center outline-none transition-all" />
+
+                  <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number"
+                        className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm"
+                        value={item.quantity}
+                        onChange={(e) => updateAddedItem(item.id, 'quantity', Number(e.target.value))}
+                      />
+                      <span className="absolute right-3 top-[7px] text-[10px] font-black text-gray-400">{item.unit}</span>
+                    </div>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">Quantity</p>
                   </div>
-                  <div className="grid grid-cols-3 md:col-span-5 gap-2">
-                    <div>
-                      <label className="text-[9px] font-black text-gray-300 dark:text-gray-500 uppercase mb-1 block">Qty</label>
-                      <input type="number" step="0.01" value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value)} className="w-full bg-gray-50 dark:bg-rice-dark dark:text-gray-200 p-3 rounded-xl font-black text-sm text-center outline-none transition-all" />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-gray-300 dark:text-gray-500 uppercase mb-1 block">Rate</label>
-                      <input type="number" step="0.01" value={item.rate || ''} onChange={e => updateItem(item.id, 'rate', e.target.value)} className="w-full bg-gray-50 dark:bg-rice-dark dark:text-gray-200 p-3 rounded-xl font-black text-sm text-right outline-none transition-all" />
-                    </div>
-                    <div className="text-right flex flex-col justify-end">
-                      <p className="text-[8px] font-black text-primary dark:text-blue-400 uppercase mb-1">Total</p>
-                      <div className="font-black text-sm text-primary dark:text-blue-200 py-3">{Number(item.amount).toFixed(2)}</div>
-                    </div>
+
+                  <div>
+                    <input 
+                      type="number"
+                      className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm"
+                      value={item.rate}
+                      onChange={(e) => updateAddedItem(item.id, 'rate', Number(e.target.value))}
+                    />
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">Rate</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center gap-2 pt-2">
+                  <div className="text-center">
+                    <p className="font-black text-primary dark:text-blue-400 text-xl leading-none">{formatCurrency(item.amount)}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1">Amount</p>
+                  </div>
+                  <div className="w-full flex justify-end">
+                    <button onClick={() => removeItem(item.id)} className="p-2.5 text-gray-300 hover:text-red-500 transition-colors active:scale-90 bg-white dark:bg-rice-surface rounded-xl shadow-sm">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
-            <div className="h-44 md:hidden" /> {/* Spacer for overlap */}
+
+            <div className="group bg-primary/5 dark:bg-blue-900/10 rounded-[2rem] border border-dashed border-primary/20 transition-all p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95">
+              <div className="flex flex-col text-center">
+                 <input 
+                    className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-sm font-black dark:text-gray-200 focus:ring-2 focus:ring-primary/20 text-center uppercase shadow-sm"
+                    placeholder="ENTER DESCRIPTION"
+                    value={newItem.description}
+                    onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                  />
+                  <p className="text-[9px] text-primary/60 dark:text-blue-400 font-black uppercase tracking-tight mt-1">New Item Description</p>
+              </div>
+
+              <div className="space-y-4 pt-1">
+                <div>
+                  <input 
+                    className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm"
+                    placeholder="HSN CODE"
+                    value={newItem.hsn}
+                    onChange={(e) => setNewItem({...newItem, hsn: e.target.value})}
+                  />
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">HSN/SAC</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm"
+                      placeholder="QTY"
+                      value={newItem.quantity || ''}
+                      onChange={(e) => setNewItem({...newItem, quantity: Number(e.target.value)})}
+                    />
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">Qty</p>
+                  </div>
+                  <div>
+                    <select 
+                      className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm appearance-none"
+                      value={newItem.unit}
+                      onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
+                    >
+                      <option value="BAGS">BAGS</option>
+                      <option value="QTL">QTL</option>
+                      <option value="MT">MT</option>
+                      <option value="KG">KG</option>
+                    </select>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">Unit</p>
+                  </div>
+                </div>
+
+                <div>
+                  <input 
+                    type="number"
+                    className="w-full bg-white dark:bg-rice-surface border-none rounded-xl px-3 py-2 text-xs font-black dark:text-gray-200 text-center shadow-sm"
+                    placeholder="RATE"
+                    value={newItem.rate || ''}
+                    onChange={(e) => setNewItem({...newItem, rate: Number(e.target.value)})}
+                  />
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight mt-1 text-center">Rate / {newItem.unit}</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={addItemToBill}
+                disabled={!newItem.description || !newItem.quantity || !newItem.rate}
+                className="w-full bg-primary text-white py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-xs shadow-lg shadow-primary/20 hover:bg-primary/95 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale disabled:pointer-events-none"
+              >
+                <Plus className="w-5 h-5" />
+                ADD ITEM
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Footer Bar */}
-        <section className="bg-primary dark:bg-rice-surface text-white p-6 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl fixed bottom-24 left-4 right-4 md:static z-40 border border-white/10 dark:border-gray-800 backdrop-blur-md transition-colors">
-          <div className="flex items-center gap-10 w-full md:w-auto justify-around md:justify-start">
-            <div>
-              <p className="text-[10px] font-black text-white/50 dark:text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Scale className="w-3 h-3" /> Total Qty</p>
-              <p className="text-xl font-black dark:text-blue-200">{totalQuantity.toFixed(2)} <span className="text-[10px] opacity-60">QTL</span></p>
-            </div>
-            <div className="w-px h-8 bg-white/10 dark:bg-gray-800 hidden md:block"></div>
-            <div>
-              <p className="text-[10px] font-black text-white/50 dark:text-gray-500 uppercase tracking-widest mb-1">Grand Total</p>
-              <p className="text-2xl font-black dark:text-blue-200">{formatCurrency(totalAmount)}</p>
-            </div>
+        <div className="border-t border-gray-50 dark:border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-8">
+          <div className="text-center sm:text-left">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Net Payable Amount</p>
+            <p className="text-4xl font-black text-primary dark:text-blue-400">
+              {formatCurrency(items.reduce((sum, item) => sum + item.amount, 0))}
+            </p>
           </div>
-          <button onClick={handleSave} className="w-full md:w-auto bg-white dark:bg-primary text-primary dark:text-white px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
-            <Download className="w-5 h-5" /> Generate Bill
+          <button 
+            onClick={handleSave}
+            className="w-full sm:w-auto bg-primary text-white px-12 py-5 rounded-[2rem] font-black text-sm shadow-xl shadow-primary/30 hover:bg-primary/95 transition-all active:scale-95 flex items-center justify-center gap-3"
+          >
+            <ReceiptText className="w-6 h-6" />
+            Generate Bill & PDF
           </button>
-        </section>
+        </div>
       </div>
     </div>
   );
 };
 
-const CustomerManager: React.FC<{ customers: Customer[], onAdd: (c: Customer) => void }> = ({ customers, onAdd }) => {
-  const [showAdd, setShowAdd] = useState(false);
-  const [newCust, setNewCust] = useState({ name: '', gstin: '', address: '' });
+const CustomerManager: React.FC<{ 
+  customers: Customer[], 
+  onAdd: (c: Customer) => void,
+  onUpdate: (c: Customer) => void
+}> = ({ customers, onAdd, onUpdate }) => {
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [name, setName] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
 
-  const handleAdd = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (editingCustomer) {
+      setName(editingCustomer.name);
+      setGstin(editingCustomer.gstin);
+      setAddress(editingCustomer.address);
+      setPhone(editingCustomer.phone || '');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setName('');
+      setGstin('');
+      setAddress('');
+      setPhone('');
+    }
+  }, [editingCustomer]);
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCust.name) return;
-    onAdd({ ...newCust, id: Date.now().toString() });
-    setNewCust({ name: '', gstin: '', address: '' });
-    setShowAdd(false);
+    if (!name || !address) return alert('Name and Address are required');
+    if (phone && phone.length !== 10) return alert('Please enter a valid 10-digit phone number');
+    
+    if (editingCustomer) {
+      onUpdate({
+        ...editingCustomer,
+        name,
+        gstin: gstin || 'UNREGISTERED',
+        address,
+        phone
+      });
+      setEditingCustomer(null);
+    } else {
+      onAdd({
+        id: Math.random().toString(36).substr(2, 9),
+        name,
+        gstin: gstin || 'UNREGISTERED',
+        address,
+        phone
+      });
+    }
+    setName('');
+    setGstin('');
+    setAddress('');
+    setPhone('');
+  };
+
+  const handleEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Only allow numeric characters and max length of 10
+    const val = e.target.value.replace(/\D/g, '');
+    if (val.length <= 10) {
+      setPhone(val);
+    }
   };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500 pb-20">
-      <header className="flex justify-between items-end">
-        <div>
-          <h2 className="text-2xl font-black text-primary dark:text-blue-400">Parties</h2>
-          <p className="text-gray-400 text-sm font-medium">Business Partners Ledger</p>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="size-12 bg-primary/10 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center">
+          <Users className="w-6 h-6 text-primary dark:text-blue-400" />
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} className={`p-4 rounded-2xl font-black shadow-lg transition-all ${showAdd ? 'bg-gray-100 dark:bg-rice-surface text-gray-500 dark:text-gray-400' : 'bg-primary text-white'}`}>
-          {showAdd ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
-        </button>
-      </header>
+        <h2 className="text-2xl font-black tracking-tight dark:text-gray-100">
+          {editingCustomer ? 'Update Partner' : 'Customer Directory'}
+        </h2>
+      </div>
 
-      {showAdd && (
-        <form onSubmit={handleAdd} className="bg-white dark:bg-rice-surface p-6 md:p-10 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-xl space-y-5 animate-in slide-in-from-top-4 transition-colors">
-          <input type="text" placeholder="Full Business Name" required value={newCust.name} onChange={e => setNewCust({...newCust, name: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-black text-sm outline-none transition-all" />
-          <input type="text" placeholder="GSTIN Number" value={newCust.gstin} onChange={e => setNewCust({...newCust, gstin: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-black text-sm uppercase outline-none transition-all" />
-          <textarea placeholder="Complete Address" value={newCust.address} onChange={e => setNewCust({...newCust, address: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-rice-dark dark:text-gray-200 border border-transparent focus:bg-white dark:focus:bg-rice-dark/50 focus:border-primary/20 rounded-2xl font-black text-sm h-28 outline-none resize-none transition-all" />
-          <button type="submit" className="w-full bg-primary text-white py-5 rounded-2xl font-black shadow-xl active:scale-95 transition-all">Register Party</button>
+      <div className="bg-white dark:bg-rice-surface p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 ml-1">
+            {editingCustomer ? 'Modify Details' : 'Register New Customer'}
+          </h3>
+          {editingCustomer && (
+            <button 
+              onClick={() => setEditingCustomer(null)}
+              className="text-xs font-black text-red-500 uppercase tracking-widest hover:underline"
+            >
+              Cancel Edit
+            </button>
+          )}
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <input 
+              className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+              placeholder="Business/Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input 
+              className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+              placeholder="GSTIN (Optional)"
+              value={gstin}
+              onChange={(e) => setGstin(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-5">
+            <input 
+              type="tel"
+              className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+              placeholder="Phone Number (10 Digits)"
+              maxLength={10}
+              value={phone}
+              onChange={handlePhoneChange}
+            />
+          </div>
+          <textarea 
+            className="w-full bg-gray-50 dark:bg-rice-dark border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200 shadow-sm"
+            placeholder="Full Address"
+            rows={3}
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+          <button 
+            type="submit"
+            className={`w-full ${editingCustomer ? 'bg-blue-600' : 'bg-primary'} text-white py-5 rounded-2xl font-black text-sm shadow-xl transition-all active:scale-95`}
+          >
+            {editingCustomer ? 'Update Record' : 'Add to Database'}
+          </button>
         </form>
-      )}
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {customers.map(c => (
-          <div key={c.id} className="bg- rice-surface dark:bg-rice-surface p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm flex items-start gap-4 hover:shadow-md transition-all group cursor-pointer bg-white">
-            <div className="size-12 bg-primary/5 dark:bg-blue-900/20 text-primary dark:text-blue-400 rounded-2xl flex items-center justify-center font-black text-xl group-hover:bg-primary group-hover:text-white transition-all">
-              {c.name[0].toUpperCase()}
+      <div className="space-y-4">
+        <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 ml-1">Existing Customers</h3>
+        <div className="grid grid-cols-1 gap-3">
+          {customers.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 font-bold bg-white dark:bg-rice-surface rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-800">
+              No customers registered yet
             </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="font-black text-lg truncate text-primary dark:text-blue-400">{c.name}</h4>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{c.gstin || 'NO GSTIN'}</p>
-              <p className="text-xs text-gray-400 mt-3 italic line-clamp-2 leading-relaxed">{c.address}</p>
-            </div>
-          </div>
-        ))}
-        {customers.length === 0 && !showAdd && (
-          <div className="col-span-full bg-white dark:bg-rice-surface p-16 rounded-[2.5rem] text-center border border-dashed border-gray-200 dark:border-gray-800 transition-colors">
-             <Users className="w-12 h-12 text-gray-100 dark:text-gray-800 mx-auto mb-4" />
-             <p className="font-black text-gray-300 dark:text-gray-700 uppercase tracking-widest text-xs">No trade partners found</p>
-          </div>
-        )}
+          ) : (
+            customers.map(c => (
+              <div key={c.id} className="bg-white dark:bg-rice-surface p-6 rounded-3xl border border-gray-50 dark:border-gray-800 flex items-center justify-between group transition-all hover:border-primary/20 shadow-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm dark:text-gray-100 truncate">{c.name}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{c.gstin}</p>
+                    {c.phone && <span className="text-[10px] text-primary dark:text-blue-400 font-black">| {c.phone}</span>}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-2 dark:text-gray-400 line-clamp-1">{c.address}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleEdit(c)}
+                    className="size-11 bg-gray-50 dark:bg-rice-dark rounded-xl flex items-center justify-center text-gray-400 hover:text-primary transition-all active:scale-95"
+                  >
+                    <Edit2 className="w-5 h-5" />
+                  </button>
+                  <div className="size-11 bg-gray-50 dark:bg-rice-dark rounded-full flex items-center justify-center">
+                    <ChevronRight className="w-5 h-5 text-gray-300" />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
 const BillHistory: React.FC<{ bills: Bill[], onDelete: (id: string) => void }> = ({ bills, onDelete }) => {
-  const [search, setSearch] = useState('');
-  const filtered = bills.filter(b => b.customerName.toLowerCase().includes(search.toLowerCase()) || b.billNo.includes(search));
+  const handleShare = async (bill: Bill) => {
+    if (navigator.share) {
+      const shareData: ShareData = {
+        title: `Invoice ${bill.billNo}`,
+        text: `Invoice from ${BUSINESS_PROFILE.name} to ${bill.customerName} for ${formatCurrency(bill.totalAmount)}`,
+      };
+
+      // Safely check and add URL to avoid Invalid URL errors in restricted environments
+      try {
+        if (window.location.href && window.location.href.startsWith('http')) {
+          new URL(window.location.href); // Verify validity
+          shareData.url = window.location.href;
+        }
+      } catch (e) {
+        console.warn('Current URL is invalid for sharing, skipping url property.');
+      }
+
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Error sharing:', err);
+        }
+      }
+    } else {
+      alert('Sharing is not supported on this browser. Try downloading the PDF instead.');
+    }
+  };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500 pb-20">
-      <header>
-        <h2 className="text-2xl font-black text-primary dark:text-blue-400">Sales Ledger</h2>
-        <p className="text-gray-400 text-sm font-medium">Complete record of past transactions</p>
-      </header>
-
-      <div className="relative group">
-        <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 dark:text-gray-600 w-5 h-5 group-focus-within:text-primary dark:group-focus-within:text-blue-400 transition-colors" />
-        <input type="text" placeholder="Search by name or bill no..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-14 pr-8 py-4 bg-white dark:bg-rice-surface dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-3xl shadow-sm font-black text-sm outline-none transition-all" />
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="size-12 bg-primary/10 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center">
+          <History className="w-6 h-6 text-primary dark:text-blue-400" />
+        </div>
+        <h2 className="text-2xl font-black tracking-tight dark:text-gray-100">Sales History</h2>
       </div>
 
-      <div className="space-y-3">
-        {filtered.map(bill => (
-          <div key={bill.id} className="bg-white dark:bg-rice-surface p-5 rounded-[2rem] border border-gray-50 dark:border-gray-800 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
-            <div className="flex items-center gap-4">
-              <div className="size-10 rounded-xl bg-primary/5 dark:bg-blue-900/20 flex items-center justify-center text-primary dark:text-blue-400 transition-colors">
-                <FileText className="w-5 h-5" />
+      <div className="space-y-4">
+        {bills.length === 0 ? (
+          <div className="p-12 text-center text-gray-400 font-bold bg-white dark:bg-rice-surface rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-800">
+            No bills found in history
+          </div>
+        ) : (
+          bills.map(bill => (
+            <div key={bill.id} className="bg-white dark:bg-rice-surface p-7 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col gap-6 transition-all hover:border-primary/20">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-5 flex-1 min-w-0">
+                  <div className="size-14 bg-gray-50 dark:bg-rice-dark rounded-[1.25rem] flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-7 h-7 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-black px-2.5 py-1 bg-primary/10 dark:bg-blue-900/40 text-primary dark:text-blue-400 rounded-lg uppercase">#{bill.billNo}</span>
+                      <span className="text-[10px] font-bold text-gray-400">{bill.date}</span>
+                    </div>
+                    <h4 className="font-black text-gray-800 dark:text-gray-100 text-xl leading-tight truncate">{bill.customerName}</h4>
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight truncate mt-1">
+                      {bill.vehicleNo || 'wb'} • {bill.paymentMode}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="font-black text-sm text-primary dark:text-blue-400">{bill.customerName}</p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase">#{bill.billNo} • {bill.date}</p>
+
+              <div className="flex items-center justify-between pt-6 border-t border-gray-50 dark:border-gray-800">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Amount Paid</p>
+                  <p className="text-2xl font-black text-primary dark:text-blue-400">{formatCurrency(bill.totalAmount)}</p>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => handleShare(bill)}
+                    className="size-12 rounded-2xl bg-gray-50 dark:bg-rice-dark flex items-center justify-center text-gray-400 hover:text-primary transition-all active:scale-95 shadow-sm"
+                    title="Share Invoice"
+                  >
+                    <Share2 className="w-6 h-6" />
+                  </button>
+                  <button 
+                    onClick={() => generateInvoicePDF(bill)}
+                    className="size-12 rounded-2xl bg-gray-50 dark:bg-rice-dark flex items-center justify-center text-gray-400 hover:text-primary transition-all active:scale-95 shadow-sm"
+                    title="Download PDF"
+                  >
+                    <Download className="w-6 h-6" />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(bill.id)}
+                    className="size-12 rounded-2xl bg-gray-50 dark:bg-rice-dark flex items-center justify-center text-gray-400 hover:text-red-500 transition-all active:scale-95 shadow-sm"
+                    title="Delete Record"
+                  >
+                    <Trash2 className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="text-right hidden sm:block">
-                <p className="font-black text-primary dark:text-blue-400 text-lg">{formatCurrency(bill.totalAmount)}</p>
-                <p className="text-[8px] font-black text-blue-500 dark:text-blue-300 uppercase tracking-widest">{bill.paymentMode}</p>
-              </div>
-              <div className="flex gap-1">
-                <button onClick={() => generateInvoicePDF(bill)} className="p-3 bg-gray-50 dark:bg-rice-dark text-gray-400 hover:bg-primary hover:text-white rounded-xl transition-all"><Download className="w-4 h-4" /></button>
-                <button onClick={() => onDelete(bill.id)} className="p-3 bg-red-50 dark:bg-red-900/20 text-red-300 hover:bg-red-500 hover:text-white rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="bg-white dark:bg-rice-surface p-20 rounded-[3rem] text-center border border-dashed border-gray-200 dark:border-gray-800 transition-colors">
-             <FileText className="w-12 h-12 text-gray-100 dark:text-gray-800 mx-auto mb-4" />
-             <p className="font-black text-gray-300 dark:text-gray-700 uppercase tracking-widest text-xs">No matching records found</p>
-          </div>
+          ))
         )}
       </div>
     </div>

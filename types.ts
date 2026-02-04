@@ -4,6 +4,7 @@ export interface Customer {
   name: string;
   gstin: string;
   address: string;
+  phone?: string;
 }
 
 export interface BillItem {
@@ -16,6 +17,8 @@ export interface BillItem {
   amount: number;
 }
 
+export type PaymentMethod = 'CASH' | 'BANK' | 'UPI';
+
 export interface Bill {
   id: string;
   billNo: string;
@@ -26,7 +29,7 @@ export interface Bill {
   customerAddress: string;
   vehicleNo: string;
   destination: string;
-  paymentMode: 'RTGS' | 'Cash';
+  paymentMode: PaymentMethod;
   items: BillItem[];
   totalAmount: number;
   totalQuantity: number;
