@@ -30,10 +30,13 @@ export interface Bill {
   vehicleNo: string;
   destination: string;
   paymentMode: PaymentMethod;
+  paymentTerms?: string;
+  additionalCharges?: number;
   items: BillItem[];
   totalAmount: number;
   totalQuantity: number;
   createdAt: number;
+  type?: 'SALE' | 'PURCHASE';
 }
 
-export type ViewState = 'DASHBOARD' | 'NEW_BILL' | 'CUSTOMERS' | 'HISTORY';
+export type ViewState = 'DASHBOARD' | 'NEW_BILL' | 'NEW_PURCHASE' | 'CUSTOMERS' | 'HISTORY';
