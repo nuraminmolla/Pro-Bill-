@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Home,
@@ -31,7 +32,10 @@ import {
   ChevronDown,
   ShoppingBag,
   ArrowDownCircle,
-  Minus
+  Minus,
+  LogOut,
+  Lock,
+  User
 } from 'lucide-react';
 import { Customer, Bill, BillItem, ViewState, PaymentMethod } from './types';
 import { BUSINESS_PROFILE, DEFAULT_PRODUCT } from './constants';
@@ -40,6 +44,85 @@ import { generateInvoicePDF } from './services/pdfService';
 import { generateDailyReportPDF } from './services/reportService';
 
 const DRAFT_STORAGE_KEY = 'mrt_bill_draft';
+
+// --- Login Component ---
+const Login: React.FC<{ onLogin: (status: boolean) => void }> = ({ onLogin }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Hardcoded credentials for demonstration
+    if (username === 'admin' && password === 'admin123') {
+      localStorage.setItem('isAuthenticated', 'true');
+      onLogin(true);
+    } else {
+      setError('Invalid username or password');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background-light dark:bg-rice-dark flex items-center justify-center p-4 transition-colors duration-300">
+      <div className="max-w-md w-full bg-white dark:bg-rice-surface rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 animate-in fade-in zoom-in duration-500">
+        <div className="flex flex-col items-center mb-8">
+          <div className="size-16 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/20 mb-4">
+            <Tractor className="text-white w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-primary dark:text-blue-400">{BUSINESS_PROFILE.name}</h1>
+          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Admin Portal</p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Username</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input 
+                type="text" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-rice-dark border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200"
+                placeholder="Enter username"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-rice-dark border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-gray-200"
+                placeholder="Enter password"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-500 text-xs font-bold rounded-xl text-center">
+              {error}
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all mt-4"
+          >
+            Sign In
+          </button>
+        </form>
+        
+        <div className="mt-8 text-center">
+           <p className="text-[10px] text-gray-400">Restricted Access • Authorized Personnel Only</p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const NewBillForm: React.FC<{
   customers: Customer[];
@@ -618,6 +701,7 @@ const Dashboard: React.FC<{
 };
 
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState<ViewState>('DASHBOARD');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
@@ -625,6 +709,13 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('theme');
     return saved === 'dark';
   });
+
+  useEffect(() => {
+    const auth = localStorage.getItem('isAuthenticated');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   useEffect(() => {
     const savedCustomers = localStorage.getItem('customers');
@@ -652,6 +743,16 @@ const App: React.FC = () => {
   }, [isDarkMode]);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
+  const handleLogin = (status: boolean) => {
+    setIsAuthenticated(status);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAuthenticated');
+    setActiveView('DASHBOARD');
+  };
 
   const addCustomer = (customer: Customer) => {
     setCustomers(prev => [...prev, customer]);
@@ -690,6 +791,10 @@ const App: React.FC = () => {
     }
   };
 
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row pb-24 md:pb-0 bg-background-light dark:bg-rice-dark transition-colors duration-300">
       <nav className="hidden md:block w-72 bg-white dark:bg-rice-surface border-r border-gray-100 dark:border-gray-800 flex-shrink-0 sticky top-0 h-screen transition-colors">
@@ -726,14 +831,23 @@ const App: React.FC = () => {
               </button>
             ))}
           </div>
-
-          <button 
-            onClick={toggleTheme}
-            className="flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold text-gray-400 hover:bg-gray-50 dark:hover:bg-rice-dark transition-all mt-auto"
-          >
-            {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
-            {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-          </button>
+          
+          <div className="mt-auto space-y-3">
+             <button 
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold text-gray-400 hover:bg-gray-50 dark:hover:bg-rice-dark transition-all"
+            >
+              {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
+              {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+            </button>
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all"
+            >
+              <LogOut className="w-5 h-5" />
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -754,8 +868,11 @@ const App: React.FC = () => {
           >
             {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
           </button>
-          <button className="size-10 rounded-full flex items-center justify-center hover:bg-gray-50 dark:hover:bg-rice-dark">
-            <Bell className="w-5 h-5 text-gray-400" />
+          <button 
+            onClick={handleLogout}
+            className="size-10 rounded-full flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </div>
